@@ -99,10 +99,13 @@ int main(int argc, char ** argv){
 
         int i_dft = 0;
         while (true) {
+            LOG("~~~IN THE INNER LOOP~~~\n");
             // sample from the target model
             llama_token id = llama_sampling_sample(ctx_sampling, ctx, NULL, i_dft);
 
             llama_sampling_accept(ctx_sampling, ctx, id, true);
+
+            LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());
 
             const std::string token_str = llama_token_to_piece(ctx, id);
 
@@ -193,6 +196,7 @@ int main(int argc, char ** argv){
         prompt_lookup();
 
         llama_decode(ctx, batch_tgt);
+        LOG("~~~IN THE OUTER LOOP~~~\n");
         ++n_past;
 
         draft.erase(draft.begin());

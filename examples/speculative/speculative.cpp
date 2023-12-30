@@ -176,6 +176,9 @@ int main(int argc, char ** argv) {
     drafts[0].i_batch_tgt.resize(1);
     drafts[0].i_batch_tgt[0] = 0;
 
+    long long tot_time = 0;
+    long num_calls = 0;
+
     while (true) {
         // print current draft sequences
         for (int s = 0; s < n_seq_dft; ++s) {
@@ -424,7 +427,22 @@ int main(int argc, char ** argv) {
             }
 
             // LOG("target batch: %s\n", LOG_BATCH_TOSTR_PRETTY(ctx_tgt, batch_tgt).c_str());
+            // llama_decode(ctx_tgt, batch_tgt);
+
+            auto start = std::chrono::high_resolution_clock::now();
+
             llama_decode(ctx_tgt, batch_tgt);
+
+            // Get the time after the operation
+            auto end = std::chrono::high_resolution_clock::now();
+
+            // Calculate the difference, which is the time taken by the operation
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+            // Add the time taken to tot_time
+            tot_time += duration;
+            num_calls += 1;
+
             ++n_past_tgt;
         }
 
@@ -440,6 +458,15 @@ int main(int argc, char ** argv) {
 
     auto t_dec_end = ggml_time_us();
 
+    LOG_TEE("\n\n");
+
+    // LOG tot_time
+    LOG_TEE("tot_time: %lld\n", tot_time);
+    // LOG num_calls
+    LOG_TEE("num_calls: %ld\n", num_calls);
+    // LOG float val of tot_time / num_calls
+    LOG_TEE("avg_time: %f\n", (float) tot_time / num_calls);
+    
     LOG_TEE("\n\n");
 
     LOG_TEE("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));

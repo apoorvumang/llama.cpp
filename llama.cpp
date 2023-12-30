@@ -5974,16 +5974,13 @@ static int llama_decode_internal(
 
     GGML_ASSERT(n_tokens <= n_batch);
 
-    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+    // LLAMA_LOG_INFO("%d n_tokens, and %d n_batch", n_tokens, n_batch);
+
+    int n_threads = cparams.n_threads;
+    // int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
     GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
     const int64_t t_start_us = ggml_time_us();
-
-#ifdef GGML_USE_MPI
-    // TODO: needs fix after #3228
-    GGML_ASSERT(false && "not implemented");
-    //ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
-#endif
 
     GGML_ASSERT(n_threads > 0);
 
@@ -6057,28 +6054,7 @@ static int llama_decode_internal(
     GGML_ASSERT(strcmp(embeddings->name, "result_norm")   == 0);
 
 
-#ifdef GGML_USE_CUBLAS
-    for (int i = 0; i < gf->n_leafs; i++) {
-        ggml_tensor * node = gf->leafs[i];
-        if (node->backend == GGML_BACKEND_GPU && node->extra == NULL) {
-            ggml_cuda_assign_scratch_offset(node, (char*)node->data - (char *) lctx.buf_alloc.data);
-            ggml_cuda_copy_to_device(node);
-        }
-    }
 
-    for (int i = 0; i < gf->n_nodes; i++) {
-        ggml_tensor * node = gf->nodes[i];
-        if (node->backend == GGML_BACKEND_GPU && node->extra == NULL) {
-            ggml_cuda_assign_scratch_offset(node, (char*)node->data - (char *) lctx.buf_alloc.data);
-        }
-    }
-
-    // HACK: ggml-alloc may change the tensor backend when reusing a parent, so force output to be on the CPU here if needed
-    if (!lctx.embedding.empty()) {
-        embeddings->backend = GGML_BACKEND_CPU;
-    }
-    res->backend = GGML_BACKEND_CPU;
-#endif
 
     // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
@@ -6095,6 +6071,10 @@ static int llama_decode_internal(
     if (ggml_cpu_has_cublas() && fully_offloaded) {
         n_threads = 1;
     }
+
+    const int64_t t_end_us = ggml_time_us();
+    LLAMA_LOG_INFO("~~~%lld~~~~", t_end_us - t_start_us);
+
 
 #if GGML_USE_MPI
     const int64_t n_layer = hparams.n_layer;
@@ -6133,12 +6113,17 @@ static int llama_decode_internal(
         }
     }
 
+   // IF I PUT TIME HERE, IM ABLE TO MEASURE
+   // 16 MS and 85 MS AS SHOWN IN GITHUB ISSUE 
+
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
     // requires GGML_PERF to be defined
     ggml_graph_print(gf);
 #endif
 
+    ggml_graph_dump_dot(gf, NULL, "llama.dot");
+    
     // plot the computation graph in dot format (for debugging purposes)
     //if (n_past%100 == 0) {
     //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
